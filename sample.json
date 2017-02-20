@@ -1,0 +1,10 @@
+{
+	"users": [
+		{
+			"username": "dbertrand",
+			"ssh-keys": [
+			],
+			"groups": ["sudo"]
+		}
+	],
+}
