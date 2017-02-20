@@ -261,7 +261,7 @@ if __name__ == '__main__':
     # merge config file with defaults
     prov = Provizzen({
         'users': [],
-        'sshd': {'port': '12222', 'disable_root': False},
+        'sshd': {'port': '12222', 'disable_root': True},
         'skel': [
             {'type': 'dir', 'mode': '700', 'path': '.ssh'},
             {'type': 'file', 'mode': '600', 'path': '.ssh/authorized_keys'}
