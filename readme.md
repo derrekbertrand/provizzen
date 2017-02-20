@@ -31,7 +31,7 @@ write_files:
           }
         ]
       }
-run_cmd:
+runcmd:
   - wget -qO /root/provizzen.py https://raw.githubusercontent.com/derrekbertrand/provizzen/dev/provizzen.py
   - python /root/provizzen.py
 ```

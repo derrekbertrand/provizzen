@@ -37,6 +37,8 @@ class Provizzen(object):
         if self.config == None:
             raise Exception('You must load a config before bootstrapping your system!')
 
+        self.call('echo', '\n=== START ===\n')
+
         self.initEpel()
         self.initFirewall()
         self.initSkel()
@@ -46,6 +48,12 @@ class Provizzen(object):
         self.initMotd()
         if self.config['mariadb']['install']:
             self.initMariaDB()
+        if self.config['nginx']['install']:
+            self.initNginx()
+        if self.config['php']['install']:
+            self.initPHP()
+
+        self.call('echo', '\n=== END ===\n')
 
         return
 
@@ -93,7 +101,7 @@ class Provizzen(object):
             self.call(['mysql', '-uroot', '-e', sql])
 
 
-        print '- Be sure to run mysql_secure_installation'
+        print '- Be sure to run `mysql_secure_installation`'
         print 'OK'
         return
 
@@ -116,8 +124,29 @@ class Provizzen(object):
 
         self.call(['yum', '-y', 'install', 'nginx'])
 
+        # open firewall ports for the service
+        self.call(['firewall-cmd', '--permanent', '--add-service=http'])
+        self.call(['firewall-cmd', '--permanent', '--add-service=https'])
+        self.call(['firewall-cmd', '--reload'])
+
         self.call(['systemctl', 'start', 'nginx'])
         self.call(['systemctl', 'enable', 'nginx'])
+
+        print 'OK'
+        return
+
+    def initPHP( self )::
+        print 'Bootstrapping PHP...'
+
+        self.call(['wget', '-qO', '/root/setup-ius.sh', 'https://setup.ius.io/'])
+        self.call(['bash', '/root/setup-ius.sh'])
+
+        if self.config['php']['version'] == '7.0':
+            self.call(['yum', 'install', '-y', 'php70u-fpm-nginx', 'php70u-cli', 'php70u-mysqlnd'])
+        elif self.config['php']['version'] == '7.1':
+            self.call(['yum', 'install', '-y', 'php71u-fpm-nginx', 'php71u-cli', 'php71u-mysqlnd'])
+        else:
+            raise Exception('Invalid PHP version: '+self.config['php']['version'])
 
         print 'OK'
         return
@@ -182,9 +211,8 @@ class Provizzen(object):
         for user in self.config['users']:
             self.initUser(user)
 
-            # we lock root only if you have other users
-            if self.config['sshd']['disable_root']:
-                self.call(['passwd', '-l', 'root'])
+        if self.config['sshd']['disable_root']:
+            self.call(['passwd', '-l', 'root'])
 
         # note that we don't lock root if we don't have a users config group
         print 'OK'
@@ -215,7 +243,7 @@ class Provizzen(object):
         return
 
     def call( self, call_args ):
-        with open(self.config['logfile'], 'w') as logfile:
+        with open(self.config['logfile'], 'a') as logfile:
             ret = subprocess.call(call_args, stdout=logfile, stderr=subprocess.STDOUT)
 
         return ret
@@ -278,6 +306,13 @@ if __name__ == '__main__':
         'mariadb': {
             'install': True,
             'accounts': []
+        },
+        'nginx': {
+            'install': True
+        },
+        'php': {
+            'install': True,
+            'version': '7.1'
         },
         'skel': [
             {'type': 'dir', 'mode': '700', 'path': '.ssh'},
