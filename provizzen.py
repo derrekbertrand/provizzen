@@ -48,7 +48,7 @@ class Provizzen(object):
     def initEpel( self ):
         print 'Bootstrapping EPEL...'
 
-        subprocess.call('yum', 'install', '-y', 'epel-release')
+        subprocess.call(['yum', 'install', '-y', 'epel-release'])
 
         print 'OK'
         return
@@ -56,18 +56,18 @@ class Provizzen(object):
     def initFirewall( self ):
         print 'Bootstrapping firewalld...'
 
-        subprocess.call('yum', 'install', '-y', 'firewalld')
-        subprocess.call('systemctl', 'start', 'firewalld')
-        subprocess.call('systemctl', 'enable', 'firewalld')
+        subprocess.call(['yum', 'install', '-y', 'firewalld'])
+        subprocess.call(['systemctl', 'start', 'firewalld'])
+        subprocess.call(['systemctl', 'enable', 'firewalld'])
 
 
-        subprocess.call('firewall-cmd', '--permanent', '--remove-service=dhcpv6-client')
-        subprocess.call('firewall-cmd', '--permanent', '--remove-service=ssh')
+        subprocess.call(['firewall-cmd', '--permanent', '--remove-service=dhcpv6-client'])
+        subprocess.call(['firewall-cmd', '--permanent', '--remove-service=ssh'])
 
         # add the port from sshd config
-        subprocess.call('firewall-cmd', '--permanent', '--add-port='+self.config['sshd']['port']+'/tcp')
+        subprocess.call(['firewall-cmd', '--permanent', '--add-port='+self.config['sshd']['port']+'/tcp'])
 
-        subprocess.call('firewall-cmd', '--reload')
+        subprocess.call(['firewall-cmd', '--reload'])
 
         print 'OK'
         return
@@ -117,7 +117,7 @@ class Provizzen(object):
         else:
             print '- Allowing remote access as root, like a moron'
 
-        subprocess.call('systemctl', 'restart', 'sshd.service')
+        subprocess.call(['systemctl', 'restart', 'sshd.service'])
 
         print 'OK'
         return
@@ -126,10 +126,10 @@ class Provizzen(object):
         print 'Bootstrapping updates...'
 
         # do an update now
-        subprocess.call('yum', 'update', '-y')
+        subprocess.call(['yum', 'update', '-y'])
 
         # install yum-cron to automatically update the server
-        subprocess.call('yum', 'install', '-y', 'yum-cron')
+        subprocess.call(['yum', 'install', '-y', 'yum-cron'])
         Provizzen.sedI('update_cmd', 'update_cmd = security', '/etc/yum/yum-cron.conf')
 
         # sed -i '/update_cmd/c\update_cmd = security' /etc/yum/yum-cron.conf
