@@ -12,13 +12,22 @@ write_files:
   - path: /root/config.json
     content: |
       {
+        "mariadb": {
+          "accounts": [
+            {
+              "username": "myuser",
+              "password": "wordpass1",
+              "database": "mydatabase"
+            }
+          ]
+        },
         "sshd": {"disable_root": false},
         "users": [
           {
             "name": "someuser",
             "pass": "5EcRe7squ3Rr1L",
-            "groups": ["sudo"],
-            "ssh-keys": ["ssh-rsa PASTE YOUR KEYS HERE"]
+            "groups": ["wheel"],
+            "authorized_keys": ["ssh-rsa PASTE YOUR KEYS HERE"]
           }
         ]
       }

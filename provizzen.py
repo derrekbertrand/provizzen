@@ -29,6 +29,8 @@ class Provizzen(object):
     def setConfigFromJson( self, json ):
         self.config = Provizzen.mergeConfig(self.defaults, json)
 
+        # todo: validate user data structure
+
         return
 
     def bootstrap( self ):
@@ -42,6 +44,8 @@ class Provizzen(object):
         # updates()
         self.initUsers()
         self.initMotd()
+        if self.config['mariadb']['install']:
+            self.initMariaDB()
 
         return
 
@@ -72,6 +76,27 @@ class Provizzen(object):
         print 'OK'
         return
 
+    def initMariaDB( self ):
+        print 'Bootstrapping MariaDB...'
+
+        self.call(['yum', '-y', 'install', 'mariadb-server', 'mariadb'])
+
+        self.call(['systemctl', 'start', 'mariadb'])
+        self.call(['systemctl', 'enable', 'mariadb'])
+
+        for account in self.config['mariadb']['accounts']:
+            sql = 'CREATE DATABASE IF NOT EXISTS '+account['database']+';\n'
+            sql += "CREATE USER '"+account['username']+"'@'localhost' IDENTIFIED BY '"+account['password']+"';\n"
+            sql += "GRANT ALL PRIVILEGES ON "+account['database']+".* TO '"+account['username']+"'@'localhost';\n"
+            sql += "FLUSH PRIVILEGES;"
+
+            self.call(['mysql', '-uroot', '-e', sql])
+
+
+        print '- Be sure to run mysql_secure_installation'
+        print 'OK'
+        return
+
     def initMotd( self ):
         if ('motd' in self.config) and (type(self.config['motd']) == str):
             print 'Bootstrapping MOTD...'
@@ -84,6 +109,17 @@ class Provizzen(object):
         else:
             print 'Skipping MOTD.'
 
+        return
+
+    def initNginx( self ):
+        print 'Bootstrapping nginx...'
+
+        self.call(['yum', '-y', 'install', 'nginx'])
+
+        self.call(['systemctl', 'start', 'nginx'])
+        self.call(['systemctl', 'enable', 'nginx'])
+
+        print 'OK'
         return
 
     # this makes sure we have the files necessary for SSH
@@ -168,11 +204,11 @@ class Provizzen(object):
             self.call(['usermod', '-a', '-G', group, user['name']])
 
         # add the user's keys
-        if len(user['ssh-keys']):
+        if len(user['authorized_keys']):
             keyfile = open('/home/'+user['name']+'/.ssh/authorized_keys', 'w')
 
-            for key in user['ssh-keys']:
-                keyfile.write(key)
+            for key in user['authorized_keys']:
+                keyfile.write(key+'\n')
 
             keyfile.close()
 
@@ -186,9 +222,9 @@ class Provizzen(object):
 
     def procOpenPipe( self, call_args ):
         return subprocess.Popen(call_args,
-            stdout=PIPE,
-            stdin=PIPE,
-            stderr=PIPE
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
 
     def sedI( self, search, replace, filename ):
@@ -239,6 +275,10 @@ if __name__ == '__main__':
         'users': [],
         'logfile': '/root/provizzen_log',
         'sshd': {'port': '12222', 'disable_root': True},
+        'mariadb': {
+            'install': True,
+            'accounts': []
+        },
         'skel': [
             {'type': 'dir', 'mode': '700', 'path': '.ssh'},
             {'type': 'file', 'mode': '600', 'path': '.ssh/authorized_keys'}
