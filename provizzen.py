@@ -39,8 +39,8 @@ class Provizzen(object):
         self.initFirewall()
         self.initSkel()
         self.initSshd()
-        # bootstrap_users()
-        # bootstrap_updates()
+        # updates()
+        self.initUsers()
         self.initMotd()
 
         return
@@ -48,7 +48,7 @@ class Provizzen(object):
     def initEpel( self ):
         print 'Bootstrapping EPEL...'
 
-        subprocess.call(['yum', 'install', '-y', 'epel-release'])
+        self.call(['yum', 'install', '-y', 'epel-release'])
 
         print 'OK'
         return
@@ -56,18 +56,18 @@ class Provizzen(object):
     def initFirewall( self ):
         print 'Bootstrapping firewalld...'
 
-        subprocess.call(['yum', 'install', '-y', 'firewalld'])
-        subprocess.call(['systemctl', 'start', 'firewalld'])
-        subprocess.call(['systemctl', 'enable', 'firewalld'])
+        self.call(['yum', 'install', '-y', 'firewalld'])
+        self.call(['systemctl', 'start', 'firewalld'])
+        self.call(['systemctl', 'enable', 'firewalld'])
 
 
-        subprocess.call(['firewall-cmd', '--permanent', '--remove-service=dhcpv6-client'])
-        subprocess.call(['firewall-cmd', '--permanent', '--remove-service=ssh'])
+        self.call(['firewall-cmd', '--permanent', '--remove-service=dhcpv6-client'])
+        self.call(['firewall-cmd', '--permanent', '--remove-service=ssh'])
 
         # add the port from sshd config
-        subprocess.call(['firewall-cmd', '--permanent', '--add-port='+self.config['sshd']['port']+'/tcp'])
+        self.call(['firewall-cmd', '--permanent', '--add-port='+self.config['sshd']['port']+'/tcp'])
 
-        subprocess.call(['firewall-cmd', '--reload'])
+        self.call(['firewall-cmd', '--reload'])
 
         print 'OK'
         return
@@ -93,12 +93,12 @@ class Provizzen(object):
         for skel in self.config['skel']:
             if skel['type'] == 'dir':
                 skel = Provizzen.mergeConfig({'type': 'dir', 'mode': '755', 'path': 'your_admin_botched_skel'}, skel)
-                subprocess.call(['mkdir', '-p', '/etc/skel/'+skel['path']])
-                subprocess.call(['chmod', skel['mode'], '/etc/skel/'+skel['path']])
+                self.call(['mkdir', '-p', '/etc/skel/'+skel['path']])
+                self.call(['chmod', skel['mode'], '/etc/skel/'+skel['path']])
             elif skel['type'] == 'file':
                 skel = Provizzen.mergeConfig({'type': 'file', 'mode': '644', 'path': 'your_admin_botched_skel'}, skel)
-                subprocess.call(['touch', '/etc/skel/'+skel['path']])
-                subprocess.call(['chmod', skel['mode'], '/etc/skel/'+skel['path']])
+                self.call(['touch', '/etc/skel/'+skel['path']])
+                self.call(['chmod', skel['mode'], '/etc/skel/'+skel['path']])
             else:
                 raise Exception('Skel type must be "dir" or "file"; "%s" given' % str(skel['type']))
 
@@ -108,16 +108,16 @@ class Provizzen(object):
     def initSshd( self ):
         print 'Bootstrapping SSH policy...'
 
-        Provizzen.sedIE('^(#?)PasswordAuthentication .+$', 'PasswordAuthentication no', '/etc/ssh/sshd_config')
-        Provizzen.sedIE('^(#?)ChallengeResponseAuthentication .+$', 'ChallengeResponseAuthentication no', '/etc/ssh/sshd_config')
-        Provizzen.sedIE('^(#?)Port .+$', 'Port '+self.config['sshd']['port'], '/etc/ssh/sshd_config')
+        self.sedIE('^(#?)PasswordAuthentication .+$', 'PasswordAuthentication no', '/etc/ssh/sshd_config')
+        self.sedIE('^(#?)ChallengeResponseAuthentication .+$', 'ChallengeResponseAuthentication no', '/etc/ssh/sshd_config')
+        self.sedIE('^(#?)Port .+$', 'Port '+self.config['sshd']['port'], '/etc/ssh/sshd_config')
         # if we are setting up users, then don't allow root access
         if self.config['sshd']['disable_root']:
-            Provizzen.sedIE('^(#?)PermitRootLogin .+$', 'PermitRootLogin no', '/etc/ssh/sshd_config')
+            self.sedIE('^(#?)PermitRootLogin .+$', 'PermitRootLogin no', '/etc/ssh/sshd_config')
         else:
             print '- Allowing remote access as root, like a moron'
 
-        subprocess.call(['systemctl', 'restart', 'sshd.service'])
+        self.call(['systemctl', 'restart', 'sshd.service'])
 
         print 'OK'
         return
@@ -126,11 +126,11 @@ class Provizzen(object):
         print 'Bootstrapping updates...'
 
         # do an update now
-        subprocess.call(['yum', 'update', '-y'])
+        self.call(['yum', 'update', '-y'])
 
         # install yum-cron to automatically update the server
-        subprocess.call(['yum', 'install', '-y', 'yum-cron'])
-        Provizzen.sedI('update_cmd', 'update_cmd = security', '/etc/yum/yum-cron.conf')
+        self.call(['yum', 'install', '-y', 'yum-cron'])
+        self.sedI('update_cmd', 'update_cmd = security', '/etc/yum/yum-cron.conf')
 
         # sed -i '/update_cmd/c\update_cmd = security' /etc/yum/yum-cron.conf
         # sed -i '/apply_updates/c\apply_updates = yes' /etc/yum/yum-cron.conf
@@ -140,95 +140,71 @@ class Provizzen(object):
         print 'OK'
         return
 
-    def bootstrap_users( config ):
+    def initUsers( self ):
         print 'Bootstrapping user accounts...'
 
-        if 'users' in config:
-            handle_users(config['users'])
+        for user in self.config['users']:
+            self.initUser(user)
 
-            #lock the root account, this is done by default if you have users
-            if 'disable_root' in config:
-                assert type(config['disable_root']) == bool
-                if(config['disable_root']):
-                    subprocess.call(['passwd', '-l', 'root'])
-            else:
-                subprocess.call(['passwd', '-l', 'root'])
+            # we lock root only if you have other users
+            if self.config['sshd']['disable_root']:
+                self.call(['passwd', '-l', 'root'])
 
         # note that we don't lock root if we don't have a users config group
         print 'OK'
         return
 
-    def handle_users( users ):
-        # check over the user data
-        validate_users(users)
+    def initUser( self, user ):
+        # create user
+        self.call(['adduser', user['name']])
 
-        # we know they're all valid, create them
-        for user in users:
-            # create user; set password
-            subprocess.call(['adduser', user['name']])
-            p = subprocess.Popen(['passwd', user['name'], '--stdin'], stdout=PIPE, stdin=PIPE, stderr=PIPE)
+
+        if len(user['pass']):
+            p = self.procOpenPipe(['passwd', user['name'], '--stdin'])
             p.communicate(input=user['pass'])
 
-            # check if we need to add this user to any groups
-            if 'groups' in user:
-                handle_user_groups( user )
-
-            # add the user's keys
-            handle_user_keys( user )
-
-        return
-
-    def validate_users( users ):
-        assert type(users) == list
-        for user in users:
-            assert 'name' in user
-            assert 'pass' in user
-            assert 'ssh-keys' in user
-            assert type(user['name']) == str
-            assert type(user['pass']) == str
-            assert type(user['ssh-keys']) == list
-            for key in user['ssh-keys']:
-                assert type(key) == str
-
-            #optional arguments
-            if 'groups' in user:
-                for group in user['group']:
-                    assert type(group) == str
-
-        return
-
-    def handle_user_groups( user ):
+        # add user to whatever groups
         for group in user['groups']:
-            subprocess.call(['usermod', '-a', '-G', group, user['name']])
+            self.call(['usermod', '-a', '-G', group, user['name']])
+
+        # add the user's keys
+        if len(user['ssh-keys']):
+            keyfile = open('/home/'+user['name']+'/.ssh/authorized_keys', 'w')
+
+            for key in user['ssh-keys']:
+                keyfile.write(key)
+
+            keyfile.close()
 
         return
 
-    def handle_user_keys( user ):
-        keyfile = open('/home/'+user['name']+'/.ssh/authorized_keys', 'a')
+    def call( self, call_args ):
+        with open(self.config['logfile'], 'w') as logfile:
+            ret = subprocess.call(call_args, stdout=logfile, stderr=subprocess.STDOUT)
 
-        for key in user['ssh-keys']:
-            keyfile.write(key)
+        return ret
 
-        keyfile.close()
+    def procOpenPipe( self, call_args ):
+        return subprocess.Popen(call_args,
+            stdout=PIPE,
+            stdin=PIPE,
+            stderr=PIPE
+        )
 
-        return
-
-    @staticmethod
-    def sedI( search, replace, filename ):
-        return subprocess.call([
+    def sedI( self, search, replace, filename ):
+        return self.call([
             'sed',
             '-i',
-            "'/"+search+"/c\\"+replace+"'",
+            "/"+search+"/c\\"+replace,
             filename
         ])
 
-    @staticmethod
-    def sedIE( regex, replace, filename ):
-        return subprocess.call([
+    def sedIE( self, regex, replace, filename ):
+        return self.call([
             'sed',
             '-i',
             '-E',
-            '"s/'+regex+'/'+replace+'/"',
+            's/'+regex+'/'+replace+'/',
             filename
         ])
 
@@ -261,6 +237,7 @@ if __name__ == '__main__':
     # merge config file with defaults
     prov = Provizzen({
         'users': [],
+        'logfile': '/root/provizzen_log',
         'sshd': {'port': '12222', 'disable_root': True},
         'skel': [
             {'type': 'dir', 'mode': '700', 'path': '.ssh'},

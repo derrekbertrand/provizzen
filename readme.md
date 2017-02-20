@@ -12,7 +12,15 @@ write_files:
   - path: /root/config.json
     content: |
       {
-        "sshd": {"disable_root": False}
+        "sshd": {"disable_root": false},
+        "users": [
+          {
+            "name": "someuser",
+            "pass": "5EcRe7squ3Rr1L",
+            "groups": ["sudo"],
+            "ssh-keys": ["ssh-rsa PASTE YOUR KEYS HERE"]
+          }
+        ]
       }
 run_cmd:
   - wget -qO /root/provizzen.py https://raw.githubusercontent.com/derrekbertrand/provizzen/dev/provizzen.py
