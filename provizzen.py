@@ -11,6 +11,7 @@ class Provizzen(object):
     def __init__( self, defaults ):
         self.defaults = defaults
         self.config = None
+        self.pwd = os.path.dirname(os.path.realpath(__file__))
 
         return
 
@@ -33,9 +34,34 @@ class Provizzen(object):
             self.initNginx()
         if self.config['php']['install']:
             self.initPHP()
+        self.initDev()
+        if self.config['nginx']['install'] and self.config['php']['install']:
+            self.initFpm()
 
         self.call(['echo', '\n=== END ===\n'])
 
+        return
+
+    def initDev( self ):
+        print 'Boostrapping development tools...'
+
+        self.call(['yum', 'install', '-y', 'git'])
+
+        # composer is a bit more complicated
+        if self.config['php']['install'] and self.config['php']['composer']:
+            expected_sig = self.procOpenPipe(['wget',  '-qO', '-', 'https://composer.github.io/installer.sig']).stdout.read().strip()
+            self.call(['wget', '-qO', self.pwd+'/composer-setup.php', 'https://getcomposer.org/installer'])
+            actual_sig = self.procOpenPipe(['php', '-r', "echo hash_file('SHA384', '"+self.pwd+"/composer-setup.php');"]).stdout.read().strip()
+
+            if expected_sig != actual_sig:
+                raise Exception('Error installing composer; expected sig - "'+expected_sig+'", but got sig - "'+actual_sig+'"')
+            else:
+                self.call(['php', self.pwd+'/composer-setup.php', '--quiet'])
+                self.call(['mv', self.pwd+'/composer.phar', '/usr/local/bin/composer'])
+
+            self.call(['rm', self.pwd+'/composer-setup.php'])
+
+        print 'OK'
         return
 
     def initEpel( self ):
@@ -61,6 +87,48 @@ class Provizzen(object):
         self.call(['firewall-cmd', '--permanent', '--add-port='+self.config['sshd']['port']+'/tcp'])
 
         self.call(['firewall-cmd', '--reload'])
+
+        print 'OK'
+        return
+
+    def initFpm( self ):
+        print 'Bootstrapping FPM sites...'
+
+        self.call(['cp', self.pwd+'/nginx.conf', '/etc/nginx/nginx.conf'])
+        self.call(['mkdir', '/etc/nginx/sites-available'])
+        self.call(['mkdir', '/etc/nginx/sites-enabled'])
+        self.call(['chmod', '775', '/etc/nginx/sites-available'])
+        self.call(['chmod', '755', '/etc/nginx/sites-enabled'])
+
+        for fpm_site in self.config['nginx']['fpm_sites']:
+            replacements = {
+                '@@USER@@': fpm_site['user'],
+                '@@SOCKET@@': fpm_site['socket'],
+                '@@HOSTNAME@@': fpm_site['hostname']
+            }
+
+            # create and template the file
+            Provizzen.replaceInFile(replacements, self.pwd+'/vhost.conf', '/etc/nginx/sites-available/'+fpm_site['user']+'.conf')
+            Provizzen.replaceInFile(replacements, self.pwd+'/pool.conf', '/etc/php-fpm.d/'+fpm_site['user']+'.conf')
+
+            # change permissions
+            self.call(['chmod', 'g+rx', '/home/'+fpm_site['user']])
+            self.call(['chmod', '600', '/etc/nginx/sites-available/'+fpm_site['user']+'.conf'])
+            self.call(['ln', '-s', '/etc/nginx/sites-available/'+fpm_site['user']+'.conf', '/etc/nginx/sites-enabled/'+fpm_site['user']+'.conf'])
+
+            # create the necessary directories
+            self.call(['mkdir', '-p', '/home/'+fpm_site['user']+'/www/public'])
+            self.call(['mkdir', '/home/'+fpm_site['user']+'/logs'])
+            self.call(['mkdir', '/home/'+fpm_site['user']+'/sessions'])
+
+            # set appropriate
+            self.call(['chmod', '-R', '750', '/home/'+fpm_site['user']])
+            self.call(['chmod', '700', '/home/'+fpm_site['user']+'/sessions'])
+            self.call(['chmod', '770', '/home/'+fpm_site['user']+'/logs'])
+            self.call(['chmod', '-R', '750', '/home/'+fpm_site['user']+'/www'])
+
+        # reload fpm and nginx
+
 
         print 'OK'
         return
@@ -119,8 +187,8 @@ class Provizzen(object):
     def initPHP( self ):
         print 'Bootstrapping PHP...'
 
-        self.call(['wget', '-qO', '/root/setup-ius.sh', 'https://setup.ius.io/'])
-        self.call(['bash', '/root/setup-ius.sh'])
+        self.call(['wget', '-qO', self.pwd+'/setup-ius.sh', 'https://setup.ius.io/'])
+        self.call(['bash', self.pwd+'/setup-ius.sh'])
 
         if self.config['php']['version'] == '7.0':
             self.call(['yum', 'install', '-y', 'php70u-fpm-nginx', 'php70u-cli', 'php70u-mysqlnd', 'php70u-json', 'php70u-mbstring', 'php70u-xml'])
@@ -129,16 +197,7 @@ class Provizzen(object):
         else:
             raise Exception('Invalid PHP version: '+self.config['php']['version'])
 
-        # composer is a bit more complicated
-        if self.config['php']['composer']:
-            expected_sig = self.procOpenPipe(['wget',  '-qO', '-', 'https://composer.github.io/installer.sig']).stdout.read().strip()
-            self.call(['wget', '-qO', '/root/composer-setup.php', 'https://getcomposer.org/installer'])
-            actual_sig = self.procOpenPipe(['php', '-r', "echo hash_file('SHA384', '/root/composer-setup.php');"]).stdout.read().strip()
-            if expected_sig != actual_sig:
-                raise Exception('Error installing composer; expected sig - "'+expected_sig+'", but got sig - "'+actual_sig+'"')
-            else:
-                self.call(['php', '/root/composer-setup.php', '--quiet'])
-                self.call(['mv', '/root/composer.phar', '/usr/local/bin/composer'])
+        self.call('rm', self.pwd+'/setup-ius.sh')
 
         print 'OK'
         return
@@ -270,8 +329,8 @@ class Provizzen(object):
         return
 
     def call( self, call_args ):
-        with open(self.config['logfile'], 'a') as logfile:
-            ret = subprocess.call(call_args, stdout=logfile, stderr=subprocess.STDOUT)
+        with open(self.pwd+'/output.log', 'a') as logfile:
+            ret = subprocess.call(call_args, stdout=logfile, stderr=subprocess.STDOUT, env=os.environ)
 
         return ret
 
@@ -279,7 +338,8 @@ class Provizzen(object):
         return subprocess.Popen(call_args,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            env=os.environ
         )
 
     @staticmethod
@@ -307,11 +367,28 @@ class Provizzen(object):
         else:
             return src
 
+    @staticmethod
+    def replaceInFile( replacements, src, dest=None):
+        filedata = None
+
+        if dest == None:
+            dest = src
+
+        with open(src, 'r') as file:
+            filedata = file.read()
+
+        for searchkey, value in replacements:
+            filedata = filedata.replace(searchkey, value)
+
+        with open(dest, 'w') as file:
+            file.write(filedata)
+
+        return
+
 if __name__ == '__main__':
     # merge config file with defaults
     prov = Provizzen({
         'users': [],
-        'logfile': '/root/provizzen_log',
         'sshd': {'port': '12222', 'disable_root': True},
         'mariadb': {
             'install': True,
