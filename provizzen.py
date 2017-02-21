@@ -14,25 +14,6 @@ class Provizzen(object):
 
         return
 
-
-    def setConfigFromFile( self, path=None ):
-        # open path or config.json from provizzen's directory
-        if path == None:
-            path = os.path.dirname(os.path.realpath(__file__))+'/config.json'
-
-        # load config
-        with open(path) as config_file:
-            self.setConfigFromJson(json.load(config_file))
-
-        return
-
-    def setConfigFromJson( self, json ):
-        self.config = Provizzen.mergeConfig(self.defaults, json)
-
-        # todo: validate user data structure
-
-        return
-
     def bootstrap( self ):
         if self.config == None:
             raise Exception('You must load a config before bootstrapping your system!')
@@ -242,19 +223,6 @@ class Provizzen(object):
 
         return
 
-    def call( self, call_args ):
-        with open(self.config['logfile'], 'a') as logfile:
-            ret = subprocess.call(call_args, stdout=logfile, stderr=subprocess.STDOUT)
-
-        return ret
-
-    def procOpenPipe( self, call_args ):
-        return subprocess.Popen(call_args,
-            stdout=subprocess.PIPE,
-            stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-
     def sedI( self, search, replace, filename ):
         return self.call([
             'sed',
@@ -271,6 +239,37 @@ class Provizzen(object):
             's/'+regex+'/'+replace+'/',
             filename
         ])
+
+    def setConfigFromFile( self, path=None ):
+        # open path or config.json from provizzen's directory
+        if path == None:
+            path = os.path.dirname(os.path.realpath(__file__))+'/config.json'
+
+        # load config
+        with open(path) as config_file:
+            self.setConfigFromJson(json.load(config_file))
+
+        return
+
+    def setConfigFromJson( self, json ):
+        self.config = Provizzen.mergeConfig(self.defaults, json)
+
+        # todo: validate user data structure
+
+        return
+
+    def call( self, call_args ):
+        with open(self.config['logfile'], 'a') as logfile:
+            ret = subprocess.call(call_args, stdout=logfile, stderr=subprocess.STDOUT)
+
+        return ret
+
+    def procOpenPipe( self, call_args ):
+        return subprocess.Popen(call_args,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
 
     @staticmethod
     def mergeConfig( dest, src, path=[] ):
