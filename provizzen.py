@@ -197,7 +197,7 @@ class Provizzen(object):
         else:
             raise Exception('Invalid PHP version: '+self.config['php']['version'])
 
-        self.call('rm', self.pwd+'/setup-ius.sh')
+        self.call(['rm', self.pwd+'/setup-ius.sh'])
 
         print 'OK'
         return
@@ -377,7 +377,7 @@ class Provizzen(object):
         with open(src, 'r') as file:
             filedata = file.read()
 
-        for searchkey, value in replacements:
+        for searchkey, value in replacements.iteritems():
             filedata = filedata.replace(searchkey, value)
 
         with open(dest, 'w') as file:

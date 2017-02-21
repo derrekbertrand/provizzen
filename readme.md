@@ -47,7 +47,7 @@ write_files:
         ]
       }
 runcmd:
-  - wget -qO - https://github.com/derrekbertrand/provizzen/archive/dev.tar.gz | tar xzf -
+  - wget -qO - https://github.com/derrekbertrand/provizzen/archive/dev.tar.gz | tar xzf - -C /root/
   - mv /root/config.json /root/provizzen-dev/config.json
   - python /root/provizzen-dev/provizzen.py
 ```
