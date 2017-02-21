@@ -131,11 +131,11 @@ class Provizzen(object):
 
         # composer is a bit more complicated
         if self.config['php']['composer']:
-            expected_sig = self.procOpenPipe(['wget',  '-qO', '-', 'https://composer.github.io/installer.sig']).stdout.read()
+            expected_sig = self.procOpenPipe(['wget',  '-qO', '-', 'https://composer.github.io/installer.sig']).stdout.read().strip()
             self.call(['wget', '-qO', '/root/composer-setup.php', 'https://getcomposer.org/installer'])
-            actual_sig = self.procOpenPipe(['php', '-r', "echo hash_file('SHA384', '/root/composer-setup.php');"]).stdout.read()
+            actual_sig = self.procOpenPipe(['php', '-r', "echo hash_file('SHA384', '/root/composer-setup.php');"]).stdout.read().strip()
             if expected_sig != actual_sig:
-                raise Exception('Error installing composer; expected sig - '+expected_sig+', but got sig - '+actual_sig)
+                raise Exception('Error installing composer; expected sig - "'+expected_sig+'", but got sig - "'+actual_sig+'"')
             else:
                 self.call(['php', '/root/composer-setup.php', '--quiet'])
                 self.call(['mv', '/root/composer.phar', '/usr/local/bin/composer'])
