@@ -18,7 +18,7 @@ class Provizzen(object):
         if self.config == None:
             raise Exception('You must load a config before bootstrapping your system!')
 
-        self.call('echo', '\n=== START ===\n')
+        self.call(['echo', '\n=== START ===\n'])
 
         self.initEpel()
         self.initFirewall()
@@ -34,7 +34,7 @@ class Provizzen(object):
         if self.config['php']['install']:
             self.initPHP()
 
-        self.call('echo', '\n=== END ===\n')
+        self.call(['echo', '\n=== END ===\n'])
 
         return
 
@@ -116,18 +116,29 @@ class Provizzen(object):
         print 'OK'
         return
 
-    def initPHP( self )::
+    def initPHP( self ):
         print 'Bootstrapping PHP...'
 
         self.call(['wget', '-qO', '/root/setup-ius.sh', 'https://setup.ius.io/'])
         self.call(['bash', '/root/setup-ius.sh'])
 
         if self.config['php']['version'] == '7.0':
-            self.call(['yum', 'install', '-y', 'php70u-fpm-nginx', 'php70u-cli', 'php70u-mysqlnd'])
+            self.call(['yum', 'install', '-y', 'php70u-fpm-nginx', 'php70u-cli', 'php70u-mysqlnd', 'php70u-json', 'php70u-mbstring', 'php70u-xml'])
         elif self.config['php']['version'] == '7.1':
-            self.call(['yum', 'install', '-y', 'php71u-fpm-nginx', 'php71u-cli', 'php71u-mysqlnd'])
+            self.call(['yum', 'install', '-y', 'php71u-fpm-nginx', 'php71u-cli', 'php71u-mysqlnd', 'php71u-json', 'php71u-mbstring', 'php71u-xml'])
         else:
             raise Exception('Invalid PHP version: '+self.config['php']['version'])
+
+        # composer is a bit more complicated
+        if self.config['php']['composer']:
+            expected_sig = self.procOpenPipe(['wget',  '-qO', '-', 'https://composer.github.io/installer.sig']).stdout.read()
+            self.call(['wget', '-qO', '/root/composer-setup.php', 'https://getcomposer.org/installer'])
+            actual_sig = self.procOpenPipe(['php', '-r', "echo hash_file('SHA384', '/root/composer-setup.php');"]).stdout.read()
+            if expected_sig != actual_sig:
+                raise Exception('Error installing composer; expected sig - '+expected_sig+', but got sig - '+actual_sig)
+            else:
+                self.call(['php', '/root/composer-setup.php', '--quiet'])
+                self.call(['mv', '/root/composer.phar', '/usr/local/bin/composer'])
 
         print 'OK'
         return
@@ -311,6 +322,7 @@ if __name__ == '__main__':
         },
         'php': {
             'install': True,
+            'composer': True,
             'version': '7.1'
         },
         'skel': [
