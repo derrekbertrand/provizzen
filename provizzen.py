@@ -122,11 +122,12 @@ class Provizzen(object):
             self.call(['mkdir', '/home/'+fpm_site['user']+'/logs'])
             self.call(['mkdir', '/home/'+fpm_site['user']+'/sessions'])
 
-            # set appropriate
+            # set appropriate permissions
             self.call(['chmod', '-R', '750', '/home/'+fpm_site['user']])
             self.call(['chmod', '700', '/home/'+fpm_site['user']+'/sessions'])
             self.call(['chmod', '770', '/home/'+fpm_site['user']+'/logs'])
             self.call(['chmod', '-R', '750', '/home/'+fpm_site['user']+'/www'])
+            self.call(['chown', '-R', fpm_site['user']+':'+fpm_site['user'], '/home/'+fpm_site['user']])
 
         # reload fpm and nginx
         self.call(['systemctl', 'restart', 'nginx'])
