@@ -94,6 +94,7 @@ class Provizzen(object):
     def initFpm( self ):
         print 'Bootstrapping FPM sites...'
 
+        self.call(['rm', '/etc/php-fpm.d/www.conf'])
         self.call(['cp', self.pwd+'/nginx.conf', '/etc/nginx/nginx.conf'])
         self.call(['mkdir', '/etc/nginx/sites-available'])
         self.call(['mkdir', '/etc/nginx/sites-enabled'])
@@ -128,7 +129,8 @@ class Provizzen(object):
             self.call(['chmod', '-R', '750', '/home/'+fpm_site['user']+'/www'])
 
         # reload fpm and nginx
-
+        self.call(['systemctl', 'restart', 'nginx'])
+        self.call(['systemctl', 'restart', 'php-fpm'])
 
         print 'OK'
         return
